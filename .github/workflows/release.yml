@@ -1,0 +1,119 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set version in Info.plist
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.version.outputs.version }}" QuotaStats/QuotaStats/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" QuotaStats/QuotaStats/Info.plist
+
+      - name: Build
+        run: |
+          xcodebuild -project QuotaStats/QuotaStats.xcodeproj \
+            -scheme QuotaStats \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Create DMG
+        run: |
+          APP_PATH="build/Build/Products/Release/QuotaStats.app"
+          DMG_NAME="QuotaStats-${{ steps.version.outputs.version }}.dmg"
+
+          mkdir -p dmg_staging
+          cp -R "$APP_PATH" dmg_staging/
+          ln -s /Applications dmg_staging/Applications
+
+          hdiutil create -volname "QuotaStats" \
+            -srcfolder dmg_staging \
+            -ov -format UDZO \
+            "$DMG_NAME"
+
+      - name: Generate appcast item
+        id: appcast
+        run: |
+          DMG_NAME="QuotaStats-${{ steps.version.outputs.version }}.dmg"
+          SIZE=$(stat -f%z "$DMG_NAME")
+          DATE=$(date -u +"%a, %d %b %Y %H:%M:%S %z")
+          VERSION="${{ steps.version.outputs.version }}"
+          BUILD="${{ github.run_number }}"
+
+          cat > appcast_item.xml << XMLEOF
+              <item>
+                <title>Version ${VERSION}</title>
+                <pubDate>${DATE}</pubDate>
+                <enclosure
+                  url="https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}/${DMG_NAME}"
+                  sparkle:version="${BUILD}"
+                  sparkle:shortVersionString="${VERSION}"
+                  length="${SIZE}"
+                  type="application/octet-stream" />
+              </item>
+          XMLEOF
+
+          echo "dmg_name=$DMG_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DMG_NAME="${{ steps.appcast.outputs.dmg_name }}"
+          gh release create "${{ github.ref_name }}" "$DMG_NAME" \
+            --title "QuotaStats ${{ steps.version.outputs.version }}" \
+            --generate-notes
+
+      - name: Update appcast.xml
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin gh-pages || true
+
+          if git rev-parse --verify origin/gh-pages >/dev/null 2>&1; then
+            git checkout gh-pages
+          else
+            git checkout --orphan gh-pages
+            git rm -rf . 2>/dev/null || true
+          fi
+
+          if [ ! -f appcast.xml ]; then
+            cat > appcast.xml << 'XMLEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>QuotaStats</title>
+            </channel>
+          </rss>
+          XMLEOF
+          fi
+
+          python3 - << 'PYEOF'
+          import re
+          with open("appcast_item.xml") as f:
+              item = f.read()
+          with open("appcast.xml") as f:
+              xml = f.read()
+          xml = xml.replace("</channel>", item + "\n    </channel>")
+          with open("appcast.xml", "w") as f:
+              f.write(xml)
+          PYEOF
+
+          cp appcast_item.xml /tmp/appcast_item.xml || true
+          git add appcast.xml
+          git commit -m "Update appcast for ${{ github.ref_name }}" || true
+          git push origin gh-pages

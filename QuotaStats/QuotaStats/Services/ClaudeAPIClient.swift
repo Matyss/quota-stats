@@ -1,18 +1,33 @@
 import Foundation
 import Security
+import os.log
 
-final class ClaudeAPIClient: Sendable {
+final class ClaudeAPIClient: @unchecked Sendable {
     static let shared = ClaudeAPIClient()
 
     private let usageURL = "https://api.anthropic.com/api/oauth/usage"
     private let tokenURL = "https://api.anthropic.com/v1/oauth/token"
     private let clientId = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+    private let log = Logger(subsystem: "com.matt.quotastats", category: "ClaudeAPI")
+
+    private var rateLimitedUntil: Date?
+    private var cachedQuota: ClaudeQuota?
+    private let lock = NSLock()
 
     func fetchUsage() async throws -> ClaudeQuota {
-        var credentials = try readCredentials()
+        if let blockedUntil = threadSafe({ rateLimitedUntil }), Date() < blockedUntil {
+            let wait = Int(blockedUntil.timeIntervalSinceNow)
+            log.info("Rate limited for \(wait)s more, returning cached data")
+            if let cached = threadSafe({ cachedQuota }) { return cached }
+            throw ClaudeError.rateLimited(retryAfter: wait)
+        }
 
-        let isExpired = Date().timeIntervalSince1970 * 1000 > Double(credentials.expiresAt)
-        if isExpired {
+        var credentials = try readCredentials()
+        let expiresIn = (Double(credentials.expiresAt) - Date().timeIntervalSince1970 * 1000) / 1000
+        log.info("Token expires in \(Int(expiresIn))s")
+
+        if expiresIn < 60 {
+            log.info("Token expired or expiring soon, refreshing")
             credentials = try await refreshToken(credentials)
         }
 
@@ -20,18 +35,30 @@ final class ClaudeAPIClient: Sendable {
 
         switch result {
         case .success(let quota):
+            threadSafe { cachedQuota = quota }
             return quota
         case .needsRefresh:
+            log.info("API returned 401, refreshing token")
             credentials = try await refreshToken(credentials)
             let retry = try await callUsageAPI(token: credentials.accessToken)
-            if case .success(let quota) = retry { return quota }
+            if case .success(let quota) = retry {
+                threadSafe { cachedQuota = quota }
+                return quota
+            }
             throw ClaudeError.httpError(401)
+        case .rateLimited(let retryAfter):
+            if let cached = threadSafe({ cachedQuota }) {
+                log.info("Rate limited, returning cached data")
+                return cached
+            }
+            throw ClaudeError.rateLimited(retryAfter: retryAfter)
         }
     }
 
     private enum UsageResult {
         case success(ClaudeQuota)
         case needsRefresh
+        case rateLimited(Int)
     }
 
     private func callUsageAPI(token: String) async throws -> UsageResult {
@@ -41,25 +68,46 @@ final class ClaudeAPIClient: Sendable {
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse else {
+        guard let http = response as? HTTPURLResponse else {
             throw ClaudeError.invalidResponse
         }
 
-        if httpResponse.statusCode == 401 {
+        log.info("Usage API returned \(http.statusCode)")
+
+        if http.statusCode == 401 {
             return .needsRefresh
         }
 
-        guard httpResponse.statusCode == 200 else {
-            throw ClaudeError.httpError(httpResponse.statusCode)
+        if http.statusCode == 429 {
+            let retryAfter = http.value(forHTTPHeaderField: "retry-after")
+                .flatMap(Int.init) ?? 120
+            log.warning("Rate limited, retry-after: \(retryAfter)s")
+            threadSafe { rateLimitedUntil = Date().addingTimeInterval(TimeInterval(retryAfter)) }
+            return .rateLimited(retryAfter)
         }
 
-        let usage = try JSONDecoder().decode(ClaudeUsageResponse.self, from: data)
-        return .success(mapToQuota(usage))
+        guard http.statusCode == 200 else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            log.error("Unexpected status \(http.statusCode): \(body)")
+            throw ClaudeError.httpError(http.statusCode)
+        }
+
+        do {
+            let usage = try JSONDecoder().decode(ClaudeUsageResponse.self, from: data)
+            threadSafe { rateLimitedUntil = nil }
+            return .success(mapToQuota(usage))
+        } catch {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            log.error("Failed to decode usage response: \(error) body: \(body)")
+            throw error
+        }
     }
 
     // MARK: - Token Refresh
 
     private func refreshToken(_ creds: OAuthCredentials) async throws -> OAuthCredentials {
+        log.info("Refreshing OAuth token")
+
         let body: [String: String] = [
             "grant_type": "refresh_token",
             "refresh_token": creds.refreshToken,
@@ -73,7 +121,15 @@ final class ClaudeAPIClient: Sendable {
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+        guard let http = response as? HTTPURLResponse else {
+            throw ClaudeError.invalidResponse
+        }
+
+        log.info("Token refresh returned \(http.statusCode)")
+
+        guard http.statusCode == 200 else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            log.error("Token refresh failed: \(http.statusCode) \(body)")
             throw ClaudeError.tokenRefreshFailed
         }
 
@@ -83,6 +139,8 @@ final class ClaudeAPIClient: Sendable {
               let expiresIn = json["expires_in"] as? Int else {
             throw ClaudeError.tokenParseError
         }
+
+        log.info("Token refreshed, expires in \(expiresIn)s")
 
         let expiresAt = Int(Date().timeIntervalSince1970 * 1000) + expiresIn * 1000
         let newCreds = OAuthCredentials(
@@ -101,12 +159,23 @@ final class ClaudeAPIClient: Sendable {
     // MARK: - Mapping
 
     private func mapToQuota(_ response: ClaudeUsageResponse) -> ClaudeQuota {
-        ClaudeQuota(
+        let quota = ClaudeQuota(
             fiveHourPct: response.fiveHour?.utilization ?? 0,
             fiveHourReset: parseISO8601(response.fiveHour?.resetsAt),
             sevenDayPct: response.sevenDay?.utilization ?? 0,
             sevenDayReset: parseISO8601(response.sevenDay?.resetsAt)
         )
+        log.info("Claude usage: 5h=\(quota.fiveHourPct)% 7d=\(quota.sevenDayPct)%")
+        return quota
+    }
+
+    // MARK: - Thread Safety
+
+    @discardableResult
+    private func threadSafe<T>(_ block: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return block()
     }
 
     // MARK: - Keychain
@@ -132,6 +201,7 @@ final class ClaudeAPIClient: Sendable {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
         guard status == errSecSuccess, let data = result as? Data else {
+            log.error("Keychain read failed: \(status)")
             throw ClaudeError.credentialsNotFound
         }
 
@@ -165,21 +235,29 @@ final class ClaudeAPIClient: Sendable {
         let wrapper: [String: Any] = ["claudeAiOauth": oauthDict]
         let data = try JSONSerialization.data(withJSONObject: wrapper)
 
-        let deleteQuery: [String: Any] = [
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "Claude Code-credentials"
         ]
-        SecItemDelete(deleteQuery as CFDictionary)
-
-        let addQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "Claude Code-credentials",
-            kSecAttrAccount as String: NSUserName(),
+        let update: [String: Any] = [
             kSecValueData as String: data
         ]
-        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
-        if addStatus != errSecSuccess {
-            print("Failed to save credentials to Keychain: \(addStatus)")
+
+        let status = SecItemUpdate(query as CFDictionary, update as CFDictionary)
+
+        if status == errSecItemNotFound {
+            let addQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: "Claude Code-credentials",
+                kSecAttrAccount as String: NSUserName(),
+                kSecValueData as String: data
+            ]
+            let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+            if addStatus != errSecSuccess {
+                log.error("Keychain add failed: \(addStatus)")
+            }
+        } else if status != errSecSuccess {
+            log.error("Keychain update failed: \(status)")
         }
     }
 }
@@ -190,6 +268,7 @@ enum ClaudeError: LocalizedError {
     case tokenRefreshFailed
     case invalidResponse
     case httpError(Int)
+    case rateLimited(retryAfter: Int)
 
     var errorDescription: String? {
         switch self {
@@ -198,6 +277,7 @@ enum ClaudeError: LocalizedError {
         case .tokenRefreshFailed: "Token refresh failed. Restart Claude Code to re-authenticate."
         case .invalidResponse: "Invalid response from Anthropic API."
         case .httpError(let code): "Anthropic API returned HTTP \(code)."
+        case .rateLimited(let seconds): "Rate limited by Anthropic API. Retrying in \(seconds)s."
         }
     }
 }

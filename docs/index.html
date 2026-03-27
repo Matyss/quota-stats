@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuotaStats — AI Coding Quota in Your Menu Bar</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0a0a0a;
+      --surface: #141414;
+      --border: #222;
+      --text: #e8e8e8;
+      --muted: #888;
+      --accent: #3b82f6;
+      --accent-hover: #60a5fa;
+      --green: #22c55e;
+      --orange: #f59e0b;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Hero */
+    .hero {
+      padding: 120px 0 80px;
+      text-align: center;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 100px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    .hero h1 {
+      font-size: 48px;
+      font-weight: 700;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      margin-bottom: 16px;
+    }
+
+    .hero h1 span {
+      background: linear-gradient(135deg, var(--accent), var(--green));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero p {
+      font-size: 18px;
+      color: var(--muted);
+      max-width: 480px;
+      margin: 0 auto 40px;
+    }
+
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      background: var(--accent);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+
+    .cta:hover { background: var(--accent-hover); }
+
+    .cta-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 14px 28px;
+      background: transparent;
+      color: var(--muted);
+      text-decoration: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 500;
+      transition: color 0.2s;
+      margin-left: 12px;
+    }
+
+    .cta-secondary:hover { color: var(--text); }
+
+    /* Features */
+    .features {
+      padding: 60px 0;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    .feature {
+      padding: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    .feature-icon {
+      font-size: 24px;
+      margin-bottom: 12px;
+    }
+
+    .feature h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .feature p {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* Install */
+    .install {
+      padding: 60px 0;
+    }
+
+    .install h2 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .steps {
+      display: grid;
+      gap: 12px;
+    }
+
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    .step-num {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .step-text h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .step-text p {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    code {
+      background: var(--bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: 'SF Mono', Menlo, monospace;
+    }
+
+    /* Privacy */
+    .privacy {
+      padding: 40px 0 80px;
+      text-align: center;
+    }
+
+    .privacy-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    /* Footer */
+    footer {
+      padding: 24px 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    footer a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    footer a:hover { color: var(--text); }
+
+    @media (max-width: 600px) {
+      .hero h1 { font-size: 32px; }
+      .feature-grid { grid-template-columns: 1fr; }
+      .cta-secondary { margin-left: 0; margin-top: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="hero">
+      <div class="hero-badge">macOS 14+ &middot; Open Source</div>
+      <h1>Your AI quota,<br><span>always visible</span></h1>
+      <p>QuotaStats lives in your menu bar and shows real-time usage for Cursor and Claude Code. No accounts, no cloud, no telemetry.</p>
+      <a href="https://github.com/Matyss/quota-stats/releases/latest" class="cta">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 12l-4-4h2.5V4h3v4H12L8 12z"/><path d="M2 14h12v-1.5H2V14z"/></svg>
+        Download DMG
+      </a>
+      <a href="https://github.com/Matyss/quota-stats" class="cta-secondary">
+        View on GitHub &rarr;
+      </a>
+    </section>
+
+    <section class="features">
+      <div class="feature-grid">
+        <div class="feature">
+          <div class="feature-icon">&#9673;</div>
+          <h3>Cursor IDE</h3>
+          <p>Request count with progress ring and billing period reset date. See 270/500 at a glance.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">&#9673;</div>
+          <h3>Claude Code</h3>
+          <p>5-hour and 7-day utilization windows with individual rings and reset countdowns.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">&#9881;</div>
+          <h3>Customizable</h3>
+          <p>Choose which metrics show in the menu bar. The popover always shows everything.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">&#128274;</div>
+          <h3>Private by design</h3>
+          <p>All data stays on your machine. Reads local credentials, calls APIs directly. Zero telemetry.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="install">
+      <h2>Get started</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-text">
+            <h4>Download</h4>
+            <p>Grab the latest DMG from GitHub Releases.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-text">
+            <h4>Install</h4>
+            <p>Drag to Applications. Right-click &rarr; Open on first launch.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-text">
+            <h4>Allow Keychain access</h4>
+            <p>Click <strong>Always Allow</strong> when prompted for Claude Code credentials.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-text">
+            <h4>Done</h4>
+            <p>Quota appears in your menu bar. Click for details.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="privacy">
+      <div class="privacy-badge">
+        &#128274;&ensp;No accounts &middot; No cloud &middot; No telemetry &middot; 100% local
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <div class="container">
+      <a href="https://github.com/Matyss/quota-stats">GitHub</a> &middot; MIT License
+    </div>
+  </footer>
+</body>
+</html>

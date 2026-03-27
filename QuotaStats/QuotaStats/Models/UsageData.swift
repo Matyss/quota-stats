@@ -60,7 +60,7 @@ struct ClaudeUsageResponse: Codable {
 
 struct ClaudeWindow: Codable {
     let utilization: Double
-    let resetsAt: String
+    let resetsAt: String?
 
     enum CodingKeys: String, CodingKey {
         case utilization

@@ -1,10 +1,12 @@
 import Foundation
 import SQLite3
+import os.log
 
 final class CursorAPIClient: Sendable {
     static let shared = CursorAPIClient()
 
     private let usageURL = "https://cursor.com/api/usage"
+    private let log = Logger(subsystem: "com.matt.quotastats", category: "CursorAPI")
 
     func fetchUsage() async throws -> CursorQuota {
         let userId = try extractUserId()
@@ -18,16 +20,22 @@ final class CursorAPIClient: Sendable {
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse else {
+        guard let http = response as? HTTPURLResponse else {
             throw CursorError.invalidResponse
         }
 
-        guard httpResponse.statusCode == 200 else {
-            throw CursorError.httpError(httpResponse.statusCode)
+        log.info("Cursor API returned \(http.statusCode)")
+
+        guard http.statusCode == 200 else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            log.error("Cursor API error: \(http.statusCode) \(body)")
+            throw CursorError.httpError(http.statusCode)
         }
 
         let usage = try JSONDecoder().decode(CursorUsageResponse.self, from: data)
-        return mapToQuota(usage)
+        let quota = mapToQuota(usage)
+        log.info("Cursor usage: \(quota.used)/\(quota.limit)")
+        return quota
     }
 
     private func mapToQuota(_ response: CursorUsageResponse) -> CursorQuota {
@@ -66,6 +74,7 @@ final class CursorAPIClient: Sendable {
             return userId
         }
 
+        log.error("Could not find Cursor user ID in sentry files")
         throw CursorError.userIdNotFound
     }
 
@@ -82,6 +91,7 @@ final class CursorAPIClient: Sendable {
         let dbPath = "\(home)/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
 
         guard FileManager.default.fileExists(atPath: dbPath) else {
+            log.error("Cursor state.vscdb not found")
             throw CursorError.tokenDatabaseNotFound
         }
 

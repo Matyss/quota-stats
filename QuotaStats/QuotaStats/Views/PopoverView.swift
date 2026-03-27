@@ -249,6 +249,19 @@ struct PopoverView: View {
 
                 Spacer()
 
+                Button(action: {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/Matyss/quota-stats/releases/latest")!)
+                }) {
+                    Text("Updates")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+
+                Text("·")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.quaternary)
+
                 Button(action: { NSApplication.shared.terminate(nil) }) {
                     Text("Quit")
                         .font(.system(size: 12))

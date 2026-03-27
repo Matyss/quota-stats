@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import SwiftUI
+import os.log
 
 @MainActor
 final class UsageStore: ObservableObject {
@@ -13,6 +14,7 @@ final class UsageStore: ObservableObject {
     @AppStorage("refreshInterval") var refreshInterval: TimeInterval = 300
 
     private var timer: Timer?
+    private let log = Logger(subsystem: "com.matt.quotastats", category: "Store")
 
     func startPolling() {
         refresh()
@@ -22,8 +24,6 @@ final class UsageStore: ObservableObject {
     func refresh() {
         guard !isLoading else { return }
         isLoading = true
-        cursorError = nil
-        claudeError = nil
 
         Task {
             async let cursorResult = fetchCursor()
@@ -32,13 +32,24 @@ final class UsageStore: ObservableObject {
             let (cursor, claude) = await (cursorResult, claudeResult)
 
             switch cursor {
-            case .success(let q): self.cursorQuota = q; self.cursorError = nil
-            case .failure(let e): self.cursorError = e.localizedDescription
+            case .success(let q):
+                self.cursorQuota = q
+                self.cursorError = nil
+            case .failure(let e):
+                log.error("Cursor fetch failed: \(e.localizedDescription)")
+                self.cursorError = e.localizedDescription
             }
 
             switch claude {
-            case .success(let q): self.claudeQuota = q; self.claudeError = nil
-            case .failure(let e): self.claudeError = e.localizedDescription
+            case .success(let q):
+                self.claudeQuota = q
+                self.claudeError = nil
+            case .failure(let e):
+                log.error("Claude fetch failed: \(e.localizedDescription)")
+                if self.claudeQuota != nil {
+                    log.info("Keeping previous Claude data visible")
+                }
+                self.claudeError = self.claudeQuota == nil ? e.localizedDescription : nil
             }
 
             self.isLoading = false
