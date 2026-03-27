@@ -28,3 +28,15 @@ Package.resolved
 # IDE
 .idea/
 .vscode/
+.cursor/
+
+# Security — never commit credentials
+*.env
+.env.*
+*.pem
+*.p12
+*.key
+*.keychain
+*.keychain-db
+credentials.*
+secrets.*
