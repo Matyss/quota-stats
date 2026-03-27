@@ -1,0 +1,21 @@
+# Xcode
+QuotaStats/build/
+*.xcuserdata
+*.xcworkspace
+xcuserdata/
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Temporary
+*.swp
+*.lock
+*~
