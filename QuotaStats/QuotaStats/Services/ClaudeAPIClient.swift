@@ -1,6 +1,6 @@
 import Foundation
 import Security
-import os.log
+@preconcurrency import os.log
 
 final class ClaudeAPIClient: @unchecked Sendable {
     static let shared = ClaudeAPIClient()

@@ -1,6 +1,6 @@
 import Foundation
 import SQLite3
-import os.log
+@preconcurrency import os.log
 
 final class CursorAPIClient: Sendable {
     static let shared = CursorAPIClient()
