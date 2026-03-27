@@ -1,21 +1,30 @@
-# Xcode
+# Xcode build
 QuotaStats/build/
+DerivedData/
 *.xcuserdata
 *.xcworkspace
 xcuserdata/
-DerivedData/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Xcode
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.moved-aside
 *.hmap
 *.ipa
 *.dSYM.zip
 *.dSYM
 
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-._*
+# Swift Package Manager
+.build/
+Packages/
+Package.resolved
 
-# Temporary
-*.swp
-*.lock
-*~
+# IDE
+.idea/
+.vscode/

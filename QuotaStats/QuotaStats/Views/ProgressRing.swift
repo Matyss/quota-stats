@@ -12,9 +12,8 @@ struct ProgressRing: View {
     }
 
     private var color: Color {
-        if progress < 0.5 { return .green }
-        if progress < 0.8 { return .orange }
-        return .red
+        let c = ProgressColor.forPercentage(progress)
+        return Color(red: c.r, green: c.g, blue: c.b)
     }
 
     var body: some View {
@@ -36,28 +35,5 @@ struct ProgressRing: View {
                 .foregroundStyle(color)
         }
         .frame(width: size, height: size)
-    }
-}
-
-struct MenuBarIcon: View {
-    let progress: Double
-
-    private var color: Color {
-        if progress < 0.5 { return .green }
-        if progress < 0.8 { return .orange }
-        return .red
-    }
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(color.opacity(0.3), lineWidth: 2)
-
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-        }
-        .frame(width: 11, height: 11)
     }
 }

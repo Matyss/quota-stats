@@ -6,7 +6,7 @@ final class CursorAPIClient: Sendable {
 
     private let usageURL = "https://cursor.com/api/usage"
 
-    func fetchUsage() async throws -> QuotaInfo {
+    func fetchUsage() async throws -> CursorQuota {
         let userId = try extractUserId()
         let accessToken = try extractAccessToken()
         let cookieValue = "\(userId)%3A%3A\(accessToken)"
@@ -19,32 +19,28 @@ final class CursorAPIClient: Sendable {
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw QuotaError.invalidResponse
+            throw CursorError.invalidResponse
         }
 
         guard httpResponse.statusCode == 200 else {
-            throw QuotaError.httpError(httpResponse.statusCode)
+            throw CursorError.httpError(httpResponse.statusCode)
         }
 
-        let usage = try JSONDecoder().decode(UsageResponse.self, from: data)
-        return mapToQuotaInfo(usage)
+        let usage = try JSONDecoder().decode(CursorUsageResponse.self, from: data)
+        return mapToQuota(usage)
     }
 
-    private func mapToQuotaInfo(_ response: UsageResponse) -> QuotaInfo {
+    private func mapToQuota(_ response: CursorUsageResponse) -> CursorQuota {
         let model = response.gpt4
         let used = model?.numRequests ?? 0
         let limit = model?.maxRequestUsage ?? 500
 
         var resetDate: Date?
-        if let startOfMonth = response.startOfMonth {
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let start = formatter.date(from: startOfMonth) ?? ISO8601DateFormatter().date(from: startOfMonth) {
-                resetDate = Calendar.current.date(byAdding: .month, value: 1, to: start)
-            }
+        if let start = parseISO8601(response.startOfMonth) {
+            resetDate = Calendar.current.date(byAdding: .month, value: 1, to: start)
         }
 
-        return QuotaInfo(used: used, limit: limit, resetDate: resetDate)
+        return CursorQuota(used: used, limit: limit, resetDate: resetDate)
     }
 
     // MARK: - Credential Extraction
@@ -57,22 +53,20 @@ final class CursorAPIClient: Sendable {
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let scope = json["scope"] as? [String: Any],
            let user = scope["user"] as? [String: Any],
-           let oauthId = user["id"] as? String {
-            if let userId = extractUserIdFromOAuth(oauthId) {
-                return userId
-            }
+           let oauthId = user["id"] as? String,
+           let userId = extractUserIdFromOAuth(oauthId) {
+            return userId
         }
 
         let sessionPath = "\(home)/Library/Application Support/Cursor/sentry/session.json"
         if let data = FileManager.default.contents(atPath: sessionPath),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let did = json["did"] as? String {
-            if let userId = extractUserIdFromOAuth(did) {
-                return userId
-            }
+           let did = json["did"] as? String,
+           let userId = extractUserIdFromOAuth(did) {
+            return userId
         }
 
-        throw QuotaError.userIdNotFound
+        throw CursorError.userIdNotFound
     }
 
     private func extractUserIdFromOAuth(_ oauthId: String) -> String? {
@@ -88,32 +82,32 @@ final class CursorAPIClient: Sendable {
         let dbPath = "\(home)/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
 
         guard FileManager.default.fileExists(atPath: dbPath) else {
-            throw QuotaError.tokenDatabaseNotFound
+            throw CursorError.tokenDatabaseNotFound
         }
 
         var db: OpaquePointer?
         guard sqlite3_open_v2(dbPath, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
-            throw QuotaError.tokenDatabaseError
+            throw CursorError.tokenDatabaseError
         }
         defer { sqlite3_close(db) }
 
         var stmt: OpaquePointer?
         let query = "SELECT value FROM ItemTable WHERE key = 'cursorAuth/accessToken'"
         guard sqlite3_prepare_v2(db, query, -1, &stmt, nil) == SQLITE_OK else {
-            throw QuotaError.tokenDatabaseError
+            throw CursorError.tokenDatabaseError
         }
         defer { sqlite3_finalize(stmt) }
 
         guard sqlite3_step(stmt) == SQLITE_ROW,
               let cString = sqlite3_column_text(stmt, 0) else {
-            throw QuotaError.accessTokenNotFound
+            throw CursorError.accessTokenNotFound
         }
 
         return String(cString: cString)
     }
 }
 
-enum QuotaError: LocalizedError {
+enum CursorError: LocalizedError {
     case userIdNotFound
     case tokenDatabaseNotFound
     case tokenDatabaseError

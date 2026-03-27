@@ -14,6 +14,7 @@
 		A10005 /* CursorAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10005; };
 		A10006 /* UsageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10006; };
 		A10007 /* UsageData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10007; };
+		A10008 /* ClaudeAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10011; };
 		A10010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10010; };
 /* End PBXBuildFile section */
 
@@ -28,6 +29,7 @@
 		B10008 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B10009 /* QuotaStats.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = QuotaStats.entitlements; sourceTree = "<group>"; };
 		B10010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B10011 /* ClaudeAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeAPIClient.swift; sourceTree = "<group>"; };
 		C10001 /* QuotaStats.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = QuotaStats.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -78,6 +80,7 @@
 			isa = PBXGroup;
 			children = (
 				B10005 /* CursorAPIClient.swift */,
+				B10011 /* ClaudeAPIClient.swift */,
 				B10006 /* UsageStore.swift */,
 			);
 			path = Services;
@@ -175,6 +178,7 @@
 				A10005 /* CursorAPIClient.swift in Sources */,
 				A10006 /* UsageStore.swift in Sources */,
 				A10007 /* UsageData.swift in Sources */,
+				A10008 /* ClaudeAPIClient.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

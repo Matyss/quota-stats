@@ -4,9 +4,11 @@ import SwiftUI
 
 @MainActor
 final class UsageStore: ObservableObject {
-    @Published var cursorQuota: QuotaInfo?
+    @Published var cursorQuota: CursorQuota?
+    @Published var claudeQuota: ClaudeQuota?
     @Published var isLoading = false
-    @Published var error: String?
+    @Published var cursorError: String?
+    @Published var claudeError: String?
 
     @AppStorage("refreshInterval") var refreshInterval: TimeInterval = 300
 
@@ -20,39 +22,45 @@ final class UsageStore: ObservableObject {
     func refresh() {
         guard !isLoading else { return }
         isLoading = true
-        error = nil
+        cursorError = nil
+        claudeError = nil
 
         Task {
-            do {
-                let quota = try await CursorAPIClient.shared.fetchUsage()
-                self.cursorQuota = quota
-                self.error = nil
-            } catch {
-                self.error = error.localizedDescription
+            async let cursorResult = fetchCursor()
+            async let claudeResult = fetchClaude()
+
+            let (cursor, claude) = await (cursorResult, claudeResult)
+
+            switch cursor {
+            case .success(let q): self.cursorQuota = q; self.cursorError = nil
+            case .failure(let e): self.cursorError = e.localizedDescription
             }
+
+            switch claude {
+            case .success(let q): self.claudeQuota = q; self.claudeError = nil
+            case .failure(let e): self.claudeError = e.localizedDescription
+            }
+
             self.isLoading = false
         }
     }
 
-    func scheduleTimer() {
+    private func fetchCursor() async -> Result<CursorQuota, Error> {
+        do { return .success(try await CursorAPIClient.shared.fetchUsage()) }
+        catch { return .failure(error) }
+    }
+
+    private func fetchClaude() async -> Result<ClaudeQuota, Error> {
+        do { return .success(try await ClaudeAPIClient.shared.fetchUsage()) }
+        catch { return .failure(error) }
+    }
+
+    private func scheduleTimer() {
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.refresh()
             }
         }
-    }
-
-    var menuBarText: String {
-        guard let q = cursorQuota else { return "—/—" }
-        return "\(q.used)/\(q.limit)"
-    }
-
-    var menuBarColor: Color {
-        guard let q = cursorQuota else { return .secondary }
-        let pct = q.percentage
-        if pct < 0.5 { return .green }
-        if pct < 0.8 { return .yellow }
-        return .red
     }
 }
