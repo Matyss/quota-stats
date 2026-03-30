@@ -98,9 +98,7 @@ struct PopoverView: View {
                             .foregroundStyle(.secondary)
                     }
                     if let reset = quota.fiveHourReset {
-                        Text("Resets \(formatTime(reset))")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.tertiary)
+                        resetBadge(date: reset, days: daysUntil(reset))
                     }
                 }
                 Spacer()
@@ -156,8 +154,12 @@ struct PopoverView: View {
 
             if let days, days >= 1 {
                 Text("Resets \(formatDateShort(date)) · \(days)d")
+            } else if Calendar.current.isDateInToday(date) {
+                Text("Resets today \(formatTime(date))")
+            } else if Calendar.current.isDateInTomorrow(date) {
+                Text("Resets tomorrow \(formatTime(date))")
             } else {
-                Text("Resets \(formatTime(date))")
+                Text("Resets \(formatDateShort(date)) \(formatTime(date))")
             }
         }
         .font(.system(size: 10, weight: .medium, design: .rounded))
