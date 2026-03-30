@@ -234,10 +234,23 @@
 
     footer a:hover { color: var(--text); }
 
+    .hero-image {
+      margin-top: 48px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .hero-image img {
+      width: 100%;
+      display: block;
+    }
+
     @media (max-width: 600px) {
       .hero h1 { font-size: 32px; }
       .feature-grid { grid-template-columns: 1fr; }
       .cta-secondary { margin-left: 0; margin-top: 12px; }
+      .hero-image { margin-top: 32px; }
     }
   </style>
 </head>
@@ -254,6 +267,9 @@
       <a href="https://github.com/Matyss/quota-stats" class="cta-secondary">
         View on GitHub &rarr;
       </a>
+      <div class="hero-image">
+        <img src="hero.png" alt="QuotaStats menu bar popover showing Cursor and Claude Code usage" />
+      </div>
     </section>
 
     <section class="features">
