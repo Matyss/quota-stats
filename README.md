@@ -21,9 +21,14 @@ A native macOS menu bar app that displays real-time quota usage for **Cursor IDE
 Download the latest DMG from [GitHub Releases](https://github.com/Matyss/quota-stats/releases/latest), or visit the [landing page](https://matyss.github.io/quota-stats/).
 
 1. Open the DMG, drag `QuotaStats.app` to `/Applications`
-2. **Right-click** → **Open** on first launch (bypasses Gatekeeper for unsigned app)
-3. When prompted for Keychain access, enter your login password and click **Always Allow**
+2. Remove the quarantine flag (required because the app is not notarized):
+   ```bash
+   xattr -cr /Applications/QuotaStats.app
+   ```
+3. Open the app. When prompted for Keychain access, enter your login password and click **Always Allow**
 4. Done — quota appears in your menu bar
+
+> **Why is this needed?** macOS quarantines all downloaded apps. Notarized apps pass automatically, but since QuotaStats isn't notarized yet, you need to clear the quarantine manually. Without this step, macOS Sequoia shows a misleading "app is damaged" error.
 
 ### Prerequisites
 
