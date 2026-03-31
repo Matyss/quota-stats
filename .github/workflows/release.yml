@@ -83,16 +83,14 @@ jobs:
 
       - name: Update appcast.xml
         run: |
+          cp appcast_item.xml /tmp/appcast_item.xml
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin gh-pages || true
+          git checkout -f gh-pages 2>/dev/null || git checkout --orphan gh-pages && git rm -rf . 2>/dev/null || true
 
-          if git rev-parse --verify origin/gh-pages >/dev/null 2>&1; then
-            git checkout gh-pages
-          else
-            git checkout --orphan gh-pages
-            git rm -rf . 2>/dev/null || true
-          fi
+          cp /tmp/appcast_item.xml appcast_item.xml
 
           if [ ! -f appcast.xml ]; then
             cat > appcast.xml << 'XMLEOF'
@@ -106,7 +104,6 @@ jobs:
           fi
 
           python3 - << 'PYEOF'
-          import re
           with open("appcast_item.xml") as f:
               item = f.read()
           with open("appcast.xml") as f:
@@ -116,7 +113,6 @@ jobs:
               f.write(xml)
           PYEOF
 
-          cp appcast_item.xml /tmp/appcast_item.xml || true
           git add appcast.xml
           git commit -m "Update appcast for ${{ github.ref_name }}" || true
           git push origin gh-pages
