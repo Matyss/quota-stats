@@ -14,15 +14,18 @@ final class UsageStore: ObservableObject {
     @AppStorage("refreshInterval") var refreshInterval: TimeInterval = 300
 
     private var timer: Timer?
+    private var screenSleepObservers: [Any] = []
+    private var isSuspended = false
     private let log = Logger(subsystem: "com.matt.quotastats", category: "Store")
 
     func startPolling() {
         refresh()
         scheduleTimer()
+        observeScreenSleep()
     }
 
     func refresh() {
-        guard !isLoading else { return }
+        guard !isLoading, !isSuspended else { return }
         isLoading = true
 
         Task {
@@ -74,5 +77,30 @@ final class UsageStore: ObservableObject {
                 self?.refresh()
             }
         }
+    }
+
+    private func observeScreenSleep() {
+        let ws = NSWorkspace.shared.notificationCenter
+
+        let sleepObs = ws.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            self.log.info("Screen sleeping, suspending polling")
+            self.isSuspended = true
+            self.timer?.invalidate()
+            self.timer = nil
+        }
+
+        let wakeObs = ws.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.log.info("Screen woke, resuming polling")
+                self.isSuspended = false
+                self.refresh()
+                self.scheduleTimer()
+            }
+        }
+
+        screenSleepObservers = [sleepObs, wakeObs]
     }
 }

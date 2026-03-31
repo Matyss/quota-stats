@@ -12,6 +12,7 @@ final class ClaudeAPIClient: @unchecked Sendable {
 
     private var rateLimitedUntil: Date?
     private var cachedQuota: ClaudeQuota?
+    private var cachedCredentials: OAuthCredentials?
     private let lock = NSLock()
 
     func fetchUsage() async throws -> ClaudeQuota {
@@ -22,7 +23,7 @@ final class ClaudeAPIClient: @unchecked Sendable {
             throw ClaudeError.rateLimited(retryAfter: wait)
         }
 
-        var credentials = try readCredentials()
+        var credentials = try getCredentials()
         let expiresIn = (Double(credentials.expiresAt) - Date().timeIntervalSince1970 * 1000) / 1000
         log.info("Token expires in \(Int(expiresIn))s")
 
@@ -55,6 +56,20 @@ final class ClaudeAPIClient: @unchecked Sendable {
         }
     }
 
+    private func getCredentials() throws -> OAuthCredentials {
+        if let cached = threadSafe({ cachedCredentials }) {
+            let expiresIn = (Double(cached.expiresAt) - Date().timeIntervalSince1970 * 1000) / 1000
+            if expiresIn > 60 {
+                return cached
+            }
+            log.info("Cached credentials expiring, re-reading from Keychain")
+        }
+
+        let creds = try readFromKeychain()
+        threadSafe { cachedCredentials = creds }
+        return creds
+    }
+
     private enum UsageResult {
         case success(ClaudeQuota)
         case needsRefresh
@@ -75,6 +90,7 @@ final class ClaudeAPIClient: @unchecked Sendable {
         log.info("Usage API returned \(http.statusCode)")
 
         if http.statusCode == 401 {
+            threadSafe { cachedCredentials = nil }
             return .needsRefresh
         }
 
@@ -152,7 +168,8 @@ final class ClaudeAPIClient: @unchecked Sendable {
             rateLimitTier: creds.rateLimitTier
         )
 
-        try saveCredentials(newCreds)
+        threadSafe { cachedCredentials = newCreds }
+        try saveToKeychain(newCreds)
         return newCreds
     }
 
@@ -189,7 +206,9 @@ final class ClaudeAPIClient: @unchecked Sendable {
         let rateLimitTier: String
     }
 
-    private func readCredentials() throws -> OAuthCredentials {
+    private func readFromKeychain() throws -> OAuthCredentials {
+        log.info("Reading credentials from Keychain")
+
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "Claude Code-credentials",
@@ -223,7 +242,7 @@ final class ClaudeAPIClient: @unchecked Sendable {
         )
     }
 
-    private func saveCredentials(_ creds: OAuthCredentials) throws {
+    private func saveToKeychain(_ creds: OAuthCredentials) throws {
         let oauthDict: [String: Any] = [
             "accessToken": creds.accessToken,
             "refreshToken": creds.refreshToken,
