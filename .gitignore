@@ -30,6 +30,12 @@ Package.resolved
 .vscode/
 .cursor/
 
+# Claude Code
+.claude/
+skills/
+skills-lock.json
+CLAUDE.md
+
 # Security — never commit credentials
 *.env
 .env.*
